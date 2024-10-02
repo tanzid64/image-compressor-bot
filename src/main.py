@@ -2,9 +2,10 @@ import os
 import io
 from PIL import Image
 import logging
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import (
-    ApplicationBuilder,
+    Application,
+    # ApplicationBuilder, for local development
     ContextTypes,
     CommandHandler,
     MessageHandler,
@@ -25,6 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+bot = Bot(TG_BOT_ACCESS_TOKEN)
 
 # Function for /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -85,24 +87,43 @@ async def handle_compress_image(
         logger.error(f"Error compressing image: {e}")
         await update.message.reply_text("Sorry, I couldn't compress the image.")
 
+# For local development
+# if __name__ == "__main__":
+#     # Build Application
+#     application = ApplicationBuilder().token(TG_BOT_ACCESS_TOKEN).build()
 
-if __name__ == "__main__":
-    # Build Application
-    application = ApplicationBuilder().token(TG_BOT_ACCESS_TOKEN).build()
+#     # Handlers
+#     start_handler = CommandHandler("start", start)
+#     help_handler = CommandHandler("help", help)
+#     unknown_handler = MessageHandler(filters.COMMAND, unknown)
+#     compress_handler = MessageHandler(
+#         filters.PHOTO, handle_compress_image
+#     )  # Renamed handler
 
-    # Handlers
-    start_handler = CommandHandler("start", start)
-    help_handler = CommandHandler("help", help)
-    unknown_handler = MessageHandler(filters.COMMAND, unknown)
-    compress_handler = MessageHandler(
-        filters.PHOTO, handle_compress_image
-    )  # Renamed handler
+#     # Add Handlers
+#     application.add_handler(start_handler)
+#     application.add_handler(help_handler)
+#     application.add_handler(unknown_handler)
+#     application.add_handler(compress_handler)
 
-    # Add Handlers
-    application.add_handler(start_handler)
-    application.add_handler(help_handler)
-    application.add_handler(unknown_handler)
-    application.add_handler(compress_handler)
+#     # Run Bot
+#     application.run_polling()
 
-    # Run Bot
-    application.run_polling()
+
+# Google Cloud Functions entry point
+def telegram_bot_function(request):
+    if request.method == "POST":
+        # Process Telegram update
+        update = Update.de_json(request.get_json(force=True), bot)
+        application = Application.builder().token(TG_BOT_ACCESS_TOKEN).build()
+
+        # Add Handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help))
+        application.add_handler(MessageHandler(filters.COMMAND, unknown))
+        application.add_handler(MessageHandler(filters.PHOTO, handle_compress_image))
+
+        application.process_update(update)
+
+        return "OK", 200
+    return "Bad Request", 400
